@@ -1,186 +1,141 @@
 # Tech Stack Reference
 
-> This is the canonical single-page reference for every technology used in this project.
-> For the *why* behind each decision, read the corresponding ADR in `docs/adr/`.
-> Last updated: 2026-10-14
+> Current tools only, each with a one-line reason. The reasoning behind each decision is in the linked ADR.
+> Last updated: 2026-11-04
 
 ---
 
-## System Architecture Overview
+## Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                 USER BROWSER (Desktop)                  │
-│                                                         │
-│  ┌────────────────────┐    ┌──────────────────────────┐ │
-│  │  Next.js App       │    │  Plasmo Extension        │ │
-│  │  React + tRPC      │    │  Web Clipper             │ │
-│  │  TanStack Table    │    │  LinkedIn Rate Limiter   │ │
-│  │  TanStack Query    │    └────────────┬─────────────┘ │
-│  │  Recharts          │                 │ HTTP POST      │
-│  └────────┬───────────┘                 │               │
-└───────────┼─────────────────────────────┼───────────────┘
-            │ tRPC / SSE                  │
-            ▼                             ▼
-┌───────────────────────────────────────────────────────┐
-│          Next.js Server (Route Handlers / BFF)        │
-│          Auth.js v5 | tRPC Router | Zod               │
-│          File Upload Handler                          │
-└───────────────────────────────┬───────────────────────┘
-                                │ HTTP (internal network)
-                                ▼
-┌───────────────────────────────────────────────────────┐
-│            FastAPI (Python Data Engine)               │
-│            Pydantic v2 | SQLAlchemy 2.0 (async)      │
-│                                                       │
-│  ┌─────────────────────────────────────────────────┐  │
-│  │              Celery Workers                     │  │
-│  │  ScrapeJob | ParseResumeJob                     │  │
-│  │  EmbedJob | DuplicateCheckJob                   │  │
-│  └──────────────────┬──────────────────────────────┘  │
-│                     │                                  │
-│  ┌──────────────────▼──────────────────────────────┐  │
-│  │              AI Client (Provider-Agnostic)      │  │
-│  │  Ollama (local) ←→ OpenAI SDK (cloud fallback)  │  │
-│  └─────────────────────────────────────────────────┘  │
-└─────────────────────┬─────────────────────────────────┘
-                      │
-          ┌───────────┼───────────┐
-          ▼           ▼           ▼
-   ┌─────────────┐ ┌──────┐ ┌──────────────┐
-   │ PostgreSQL  │ │Redis │ │ File Storage │
-   │ + pgvector  │ │      │ │ Local → R2   │
-   └─────────────┘ └──────┘ └──────────────┘
+                ┌────────────────────── Your machine ──────────────────────┐
+                │                                                          │
+  Browser ──────┼──▶  apps/web  (Next.js 15)                               │
+                │       RSC reads · Server Actions writes · Route Handlers │
+                │            │                                             │
+  Extension ────┼──▶  /api/clips (pairing token)        [Phase 2]          │
+  (Plasmo)      │            │                                             │
+                │            ▼                                             │
+                │     data/app.db  (SQLite / libSQL, encrypted)            │
+                │       tables · JSON columns · vectors · `tasks` queue    │
+                │            ▲                     ▲                       │
+                │            │                     │                       │
+                │     worker.ts (Node)       services/ingest (Python)      │
+                │     AI tasks · cron        scrapers · PDF tables         │
+                │            │               [Phase 2]                     │
+                │            ▼                                             │
+                │     Ollama (optional) ── or ── BYOK cloud endpoint       │
+                └──────────────────────────────────────────────────────────┘
+
+  Public demo:  Vercel (DEMO_MODE, read-only) ──▶ Turso (fake, precomputed data). No AI calls.
 ```
 
 ---
 
-## Layer-by-Layer Stack
+## 1. Core App: Phase 1 ([ADR 0003](adr/0003-application-architecture.md))
 
-### 1. Frontend (Next.js App)
-
-| Tool | Version | Purpose |
-|:---|:---|:---|
-| **Next.js** | 15 (App Router) | React framework, SSR, routing |
-| **TypeScript** | 5.x | Type safety across the stack |
-| **TailwindCSS** | 3.x | Utility-first styling |
-| **TanStack Table** | v8 | High-density data tables (sort, filter, virtualization) |
-| **TanStack Query** | v5 | Async data fetching, caching, background refetch |
-| **tRPC** | v11 | End-to-end type-safe API layer |
-| **React Hook Form** | v7 | Complex form management |
-| **Zod** | v3 | Schema validation (shared with tRPC) |
-| **Recharts** | v2 | Dashboard stats and charts |
-| **Radix UI** | latest | Headless accessible primitives (modals, dropdowns) |
-
-### 2. API / Backend Gateway (Next.js Server)
-
-| Tool | Version | Purpose |
-|:---|:---|:---|
-| **Next.js Route Handlers** | (App Router) | BFF — handles CRUD, file upload, SSE |
-| **tRPC** | v11 | Type-safe procedure router |
-| **Auth.js v5 (NextAuth)** | v5 | Authentication — email/password + OAuth |
-| **Zod** | v3 | Input validation for all procedures |
-| **Prisma** | v5 | TypeScript ORM, schema management, migrations |
-
-### 3. Python Data Engine (FastAPI Service)
-
-| Tool | Version | Purpose |
-|:---|:---|:---|
-| **FastAPI** | 0.115+ | Async API framework for heavy lifting |
-| **Pydantic** | v2 | Data contracts and validation |
-| **SQLAlchemy** | 2.0 (async) | Python ORM |
-| **Alembic** | latest | Python-side DB migrations |
-| **Celery** | v5 | Distributed async task queue |
-| **Celery Beat** | (bundled) | Cron scheduler for daily scraping jobs |
-| **httpx** | latest | Async HTTP client (replaces `requests`) |
-| **BeautifulSoup4** | latest | Static HTML parsing |
-| **Playwright (Python)** | latest | Headless browser for JS-rendered sites |
-| **PyMuPDF (fitz)** | latest | PDF parsing (government notifications, resumes) |
-| **python-docx** | latest | Docx resume parsing |
-
-### 4. AI / LLM Layer (Provider-Agnostic)
-
-| Tool | Purpose | Mode |
-|:---|:---|:---|
-| **Ollama** | Local model server (CPU-runnable) | Local |
-| **`nomic-embed-text`** (via Ollama) | Vector embeddings | Local — free |
-| **`phi3:mini`** (via Ollama) | Skill extraction, keyword extraction | Local — fast on CPU |
-| **`llama3.2:3b`** (via Ollama) | General extraction tasks | Local |
-| **OpenAI SDK** | Same SDK used for both Ollama + cloud | Hybrid |
-| **`gpt-4o-mini`** (OpenAI) | Complex reasoning, nuanced fit scoring, difficult PDFs | Cloud fallback |
-
-**Routing logic:** `AI_PROVIDER=local | cloud | hybrid` in `.env`
-- `local` → all tasks go to Ollama
-- `hybrid` → simple tasks (embeddings, extraction) → Ollama; complex tasks → `gpt-4o-mini`
-- `cloud` → all tasks go to OpenAI (development/testing)
-
-### 5. Database & Storage
-
-| Tool | Purpose |
+| Tool | Why |
 |:---|:---|
-| **PostgreSQL 16** | Primary relational database |
-| **pgvector** | Semantic vector search (embeddings stored natively) |
-| **Redis** | Celery broker + backend; application cache; rate limit store |
-| **Prisma Migrate** | Schema migrations (TypeScript side) |
-| **Alembic** | Schema migrations (Python side) |
-| **Local filesystem (Phase 1)** | Resume and file storage |
-| **Cloudflare R2 (Phase 2)** | S3-compatible object storage, zero egress fees |
+| **Next.js 15 (App Router)** | One app for the UI and the backend: RSC reads, Server Actions writes, Route Handlers for the extension. |
+| **TypeScript (strict)** | The eligibility rules are edge-case heavy; types catch mistakes early. |
+| **Zod** | One schema validates forms, Server Action input, extension payloads and LLM output. |
+| **pnpm workspaces + catalogs** | `apps/*` and `packages/*` in one repo, with one lockfile and aligned versions. |
+| **tsx** | Runs the `worker.ts` background process. |
+| **node-cron** | Recurring schedules (deadline reminders, daily scrapes) inside the worker. |
 
-### 6. Browser Extension
+## 2. UI: Phase 1
 
-| Tool | Purpose |
+| Tool | Why |
 |:---|:---|
-| **Plasmo** | Extension framework (React/TypeScript, manifest v3, multi-browser) |
-| **Chrome Storage API** | Client-side rate limit state for LinkedIn referral checks |
-| **fetch()** | Send clipped jobs to Next.js backend (authenticated) |
+| **Tailwind CSS** | Theme tokens as CSS variables, light/dark mode, separate status-color set. |
+| **Radix UI primitives** | Accessible, keyboard-navigable dialogs, menus, selects. |
+| **cmdk** | Searchable comboboxes for long lists (organisations, skills, categories). |
+| **TanStack Table v8** | Dense, sortable, filterable application tables with sticky headers. |
+| **React Hook Form + Zod resolver** | The long onboarding form without re-rendering on every keystroke; reuses server schemas. |
+| **date-fns** | Deadline math and "age as of cutoff date" calculations. |
+| **next/font** | Self-hosted fonts with no layout shift; choices recorded in `docs/DESIGN.md`. |
 
-### 7. Infrastructure & Developer Tooling
+## 3. Data: Phase 1 ([ADR 0004](adr/0004-data-storage.md))
 
-| Tool | Purpose |
+| Tool | Why |
 |:---|:---|
-| **Docker Compose** | Orchestrates all 4 services locally (Next.js, FastAPI, PostgreSQL, Redis) |
-| **Ollama** | Runs as a separate local process / Docker container |
-| **ESLint + Prettier** | TypeScript code quality |
-| **Ruff** | Python linting and formatting |
-| **pytest** | Python unit and integration tests |
-| **Jest + Testing Library** | TypeScript unit tests |
+| **SQLite via libSQL** (`@libsql/client`) | A single-file DB with native vectors and encryption at rest; nothing to install. |
+| **Drizzle ORM + drizzle-kit** | Typed queries; the only migration tool in the repo. |
+| **`files` table (BLOBs)** | Resumes and PDFs inside the encrypted database; no file paths. |
+| **Bootstrap step** | Before web and worker start: applies a staged restore, migrations (after a pre-migration copy) and lookup seeding. |
+| **Turso** | Hosted libSQL for the read-only demo; same driver as local. |
+
+## 4. AI: Optional ([ADR 0005](adr/0005-ai-strategy.md))
+
+| Tool | Why |
+|:---|:---|
+| **`openai` npm SDK** | One client for Ollama and any OpenAI-compatible BYOK provider. |
+| **Ollama** (user-installed) | Free, private local inference. |
+| **`nomic-embed-text`** | Pinned embedding model (768-dim). |
+| **`llama3.2:3b`** (configurable) | Structured extraction, always validated with Zod. |
+| **unpdf** | Resume PDF → text. |
+| **mammoth** | Resume `.docx` → text. |
+
+Modes: `none` (default) · `ollama` · `byok`. Each task has a fallback chain plus a PII guard.
+
+## 5. Phase 2 Additions ([ADR 0006](adr/0006-data-ingestion.md), [ADR 0007](adr/0007-browser-extension.md))
+
+| Tool | Why |
+|:---|:---|
+| **Python + uv** (`services/ingest`) | Python's PDF-table and scraping tools are the strongest available. |
+| **FastAPI or a plain worker** | Decided in Phase 2: FastAPI only if Next.js needs synchronous calls. |
+| **pdfplumber** (camelot fallback) | Vacancy, eligibility and date tables from government PDFs. |
+| **httpx + BeautifulSoup4** | Static HTML scraping for curated adapters. |
+| **Playwright (Python)** | Only for sources that render with JavaScript. |
+| **Pydantic v2** | Python-side schemas; OpenAPI generates TS types if FastAPI is used. |
+| **Plasmo** (`apps/extension`) | MV3 Web Clipper + LinkedIn referral bridge, Chrome and Firefox. |
+| **`packages/shared`** | Clip payload schema and enums shared by the web app and the extension. |
+
+## 6. Quality, CI and Distribution
+
+| Tool | Why |
+|:---|:---|
+| **Vitest** | Unit tests, especially for the eligibility engine. |
+| **Playwright (TS)** | A few end-to-end smoke tests against the demo build. |
+| **Biome** | Lint and format in one fast tool (replaces ESLint + Prettier). |
+| **Ruff + pytest** | Python lint/format and tests (Phase 2). |
+| **GitHub Actions** | Typecheck, lint, test and build on every PR. |
+| **Docker (single image, optional)** | Self-host convenience: web app + worker, with `data/` mounted as a volume. The app also runs as plain processes. Compose only if Python arrives and the image was built. |
+| **Vercel** | Hosts the read-only demo. |
+| **Seed/export script** | Runs the AI pipeline locally over sample data and exports it to the demo DB. |
 
 ---
 
-## Data Ingestion: Three-Tier Model
+## Repository Layout
 
-See `docs/adr/0002-data-ingestion-and-scraping-strategy.md` for full rationale.
-
-| Tier | Mechanism | Who Controls It |
-|:---|:---|:---|
-| **Tier 1** — Platform-curated scrapers | Server-side cron (Celery Beat), custom adapters per site | Platform (developer) |
-| **Tier 2** — Community-requested | User votes → developer reviews → writes adapter → shared for all | Platform (developer) |
-| **Tier 3** — User-specific sites | Web Clipper browser extension (client-side only) | User |
-
-**Scraper Registry pattern:**
-```python
-SCRAPER_REGISTRY = {
-    "free_job_alert":   FreeJobAlertAdapter,
-    "sarkari_result":   SarkariResultAdapter,
-    "generic_rss":      GenericRssAdapter,
-}
+```
+apps/web/            Next.js app + worker.ts          Phase 1
+apps/extension/      Plasmo extension                 Phase 2
+packages/shared/     Zod schemas, enums, types        Phase 2 (created when a 2nd consumer exists)
+services/ingest/     Python ingestion (uv)            Phase 2, outside the pnpm workspace
+docs/                PRD support, ADRs, STACK, DESIGN
+data/                Local DB, backups, restore staging (git-ignored)
+.env.local           Recovery key and AI defaults, repo root (git-ignored)
 ```
 
+Rules: `apps → packages` only; a package exists only once it has two consumers; internal packages export TS source (no build step).
+
 ---
 
-## Key Design Decisions (Quick Reference)
+## Deliberately Not Used
 
-| Decision | Choice | Rejected Alternative |
-|:---|:---|:---|
-| UI layout pattern | High-density Data Tables (TanStack Table) | Kanban boards |
-| API type safety | tRPC | REST + manual types / GraphQL |
-| Async task queue | Celery + Redis | APScheduler (in-process, no retry) |
-| LLM abstraction | Provider-agnostic AIClient (Ollama / OpenAI SDK) | LangChain |
-| Vector search | pgvector (in Postgres) | Pinecone / Weaviate (separate infra) |
-| Flexible LMS data | JSONB column | Deeply normalized relational tables |
-| File storage | Local → Cloudflare R2 | AWS S3 (egress costs) |
-| Real-time updates | Server-Sent Events (SSE) | WebSockets |
-| User-defined scraping | Web Clipper (client-side) | User-controlled server scrapers (SSRF risk) |
+| Dropped | Reason |
+|:---|:---|
+| PostgreSQL + pgvector | A database server for one user; libSQL covers relational data, JSON and vectors. |
+| Redis + Celery | The `tasks` table + worker is enough for one user. |
+| tRPC | Server Actions already give typed calls in a single app. |
+| TanStack Query, SSE | Not needed for one user; add only if a concrete screen needs it. |
+| Auth.js | Single user; optional local passcode only. |
+| Prisma | Heavier; weaker libSQL support than Drizzle. |
+| Cloudflare R2 / S3 | No hosted file storage. |
+| LangChain | No chains or agents; single structured calls. |
+| Turborepo / Nx | Unnecessary with 1–3 packages. |
+| Kanban boards | Dense tables suit the data better. |
 
 ---
 
@@ -188,10 +143,13 @@ SCRAPER_REGISTRY = {
 
 | ADR | Decision |
 |:---|:---|
-| [0001](adr/0001-record-architecture-decisions.md) | Use ADRs for all major architectural decisions |
-| [0002](adr/0002-data-ingestion-and-scraping-strategy.md) | Three-Tier data ingestion model |
-| [0003](adr/0003-frontend-and-api-gateway.md) | Next.js + tRPC + TanStack as frontend and BFF |
-| [0004](adr/0004-python-data-engine.md) | FastAPI + Celery + Redis as the data engine |
-| [0005](adr/0005-database-and-storage.md) | PostgreSQL + pgvector + Redis + Cloudflare R2 |
-| [0006](adr/0006-browser-extension.md) | Plasmo (React/TypeScript) for browser extension |
-| [0007](adr/0007-ai-and-llm-strategy.md) | Provider-agnostic AI client: Ollama (local) + OpenAI (cloud fallback) |
+| [0001](adr/0001-record-architecture-decisions.md) | Use ADRs for architectural decisions |
+| [0002](adr/0002-product-direction.md) | Local-first personal tool; precomputed read-only demo; distributed via GitHub |
+| [0003](adr/0003-application-architecture.md) | Single Next.js app + worker in a pnpm workspace; Python deferred to Phase 2 |
+| [0004](adr/0004-data-storage.md) | SQLite (libSQL) + Drizzle; files as BLOBs in the encrypted DB; auto-migration at start-up; single-user schema |
+| [0005](adr/0005-ai-strategy.md) | Optional AI: `none` / `ollama` / `byok`, fallback chains, PII guard, pinned embeddings |
+| [0006](adr/0006-data-ingestion.md) | Manual entry → curated scrapers → Web Clipper, all via the Backlog |
+| [0007](adr/0007-browser-extension.md) | Plasmo extension with pairing token and LinkedIn rate limits |
+| [0008](adr/0008-backup-and-restore.md) | Encrypted, versioned ZIP backup keyed by the recovery key; stage the restore, swap the database in bootstrap |
+| [0009](adr/0009-recovery-key-storage.md) | Recovery key lives in the `RECOVERY_KEY` env var (root `.env.local`); app never writes env files; `pnpm keygen`; rotation via backup + restore |
+| [0010](adr/0010-eligibility-rule-model.md) | Age limits typed per job (highest matching row wins); seeded lookup lists keyed by stable text keys; pure eligibility engine |

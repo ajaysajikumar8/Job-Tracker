@@ -6,6 +6,9 @@
 *.key
 
 # ── Sensitive user data (resumes, PII, DB dumps) ──────
+/data/
+*.db-wal
+*.db-shm
 uploads/
 storage/
 *.pdf
@@ -16,6 +19,9 @@ storage/
 *.dump
 *.sql.gz
 pgdata/
+# Test fixtures are committed on purpose (resume/PDF parser inputs)
+!**/fixtures/**/*.pdf
+!**/fixtures/**/*.docx
 
 # ── Node / Next.js ────────────────────────────────────
 node_modules/
