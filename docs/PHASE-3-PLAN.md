@@ -7,7 +7,7 @@
 ## Entry gate
 
 - [ ] Phase 2 complete (or deliberately cut short), with the Python ingest service running.
-- [ ] Phase 1/2 used for real. Phase 3 is the largest feature set and the easiest to over-build: confirm you will actually study with it before investing.
+- [ ] Phase 1/2 used for real. Phase 3 is the largest feature set and the easiest to over-build: confirm the LMS will actually be used before investing.
 - [ ] Next free ADR number checked.
 
 ## Milestone order
@@ -25,7 +25,7 @@ The LMS (M1–M3) must exist before the Preparedness Score (M5), because the sco
 ## P3-M0: Re-plan and decisions
 
 - [ ] **Re-read the PRD, ADRs and Phase 1/2 outcomes.** Rewrite this file. **Done when:** every task below is confirmed or replaced.
-- [ ] **ADR: syllabus data model.** The PRD lists `customized_nodes` (List of Objects) and `progress_tracking` (Map) as JSON on `UserLearningRoadmap`. That works for reading but is poor for per-node queries, the cascading revision count and the Preparedness Score. Decide between: (a) JSON tree in one column, (b) normalised `syllabus_nodes` table with `parent_id` (adjacency list) plus a `node_progress` table, (c) a hybrid. **Recommendation to evaluate:** (b), because cascading updates and score aggregation are table operations, and the template content can stay JSON. **Done when:** ADR Accepted with the cascade and aggregation queries sketched.
+- [ ] **ADR: syllabus data model.** The PRD lists `customized_nodes` (List of Objects) and `progress_tracking` (Map) as JSON on `UserLearningRoadmap`. That works for reading but is poor for per-node queries, the cascading revision count and the Preparedness Score. Decide between: (a) JSON tree in one column, (b) normalised `syllabus_nodes` table with `parent_id` (adjacency list) plus a `node_progress` table, (c) a hybrid. **Leading option:** (b), because cascading updates and score aggregation are table operations, and the template content can stay JSON. **Done when:** ADR Accepted with the cascade and aggregation queries sketched.
 - [ ] **ADR: spaced-repetition scheduling.** The PRD describes a manual "revision counter" ("Rewatch") with cascading increments, plus reminders when a revision is due. Decide: counter only, or counter + due dates (a simple interval ladder such as 1/3/7/21 days vs SM-2). Avoid overbuilding. **Done when:** ADR Accepted, with the reminder trigger defined.
 - [ ] **ADR: Preparedness Score formula.** Define it precisely before any code: how syllabus coverage and revision count combine, how topic weights are set (equal, per-exam weightage, user-set), and what "65% ready" means. **Done when:** ADR has the formula, a worked example, and explains why the number is not misleading (for example, shows coverage and revision confidence separately as well as combined).
 - [ ] **Decide the template content source.** Who writes "GATE CS Basics" and "Core Frontend", and under what license? Do not copy copyrighted syllabus text. **Done when:** a content policy and source are recorded.
@@ -33,7 +33,7 @@ The LMS (M1–M3) must exist before the Preparedness Score (M5), because the sco
 
 ## P3-M1: Syllabus data model and engine
 
-- [ ] **Migration** per the P3-M0 ADR: syllabus tables, node progress, revision log. *Migration: confirm first.* **Done when:** it applies on a Phase 2 database copy and all earlier backup fixtures still restore.
+- [ ] **Migration** per the P3-M0 ADR: syllabus tables, node progress, revision log. **Done when:** it applies on a Phase 2 database copy and all earlier backup fixtures still restore.
 - [ ] **Backup registry + fixtures:** add the new tables, bump `schema_version`, add a fixture. **Done when:** a Phase 2 backup restores into Phase 3 and Phase 3 round-trips.
 - [ ] **Tree operations in a pure, tested module:** add, move, reorder, delete (with subtree), aggregate. Reject cycles and cap depth. **Done when:** property-style tests cover move-into-own-subtree and large trees.
 - [ ] **Zod schemas for nodes and progress**, shared with forms and backup validation.

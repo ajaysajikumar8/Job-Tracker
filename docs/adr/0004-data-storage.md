@@ -24,7 +24,7 @@ Running a database server (PostgreSQL) and a cache/broker (Redis) for one user a
 
 - **One file** (`data/app.db`). Nothing to install. Backups are encrypted exports (ADR 0008), not raw file copies.
 - **libSQL** (the SQLite fork used by Turso) adds:
-  - **native vector columns** (`F32_BLOB(768)` for `nomic-embed-text`) with vector search, so no pgvector or separate vector store is needed;
+  - **native vector columns** (`F32_BLOB(768)`, sized to the pinned embedding model, which is `nomic-embed-text` by default) with vector search, so no pgvector or separate vector store is needed;
   - **encryption at rest** for local database files through the client's encryption key. The key is the **recovery key**, read from the `RECOVERY_KEY` environment variable at startup (see ADR 0009 for format, storage, startup rules and rotation);
   - a **hosted option (Turso)** that uses the same driver, used for the read-only demo.
 - **Nested data** is stored as JSON columns (`text` with Zod-validated shape) and queried with SQLite JSON functions where needed.
@@ -84,3 +84,6 @@ There is exactly one profile, so tables do not carry `user_id` foreign keys. Add
 
 The original decision kept resumes and PDFs under `data/files/`, outside database encryption. That left the most sensitive document next to the key, in plain text, and forced restore to swap two paths consistently. Files are now BLOBs in a `files` table (see "Files: BLOBs in the database"). Effects: resumes are encrypted at rest, a backup is one consistent snapshot, restore swaps a single file, and no code path handles a user-supplied file path. Cost: a larger database file, accepted at single-user scale.
 
+## Amendment (2026-11-09): vector size is fixed by the schema
+
+The `embedding` column is `F32_BLOB(768)`. Only embedding models that return 768 values can be used (ADR 0005, "Embeddings are pinned"). Moving to a different size is a release change: a new Drizzle migration for the column plus a full re-embed. Vectors are derived data and are not backed up (ADR 0008), so the migration can rebuild the column without losing anything that cannot be recomputed.

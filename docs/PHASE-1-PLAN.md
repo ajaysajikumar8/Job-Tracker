@@ -7,15 +7,14 @@
 ## Ground rules
 
 - **Real data rule:** no real personal data (DOB, category, CTC, resume) goes in until **M8 (backup/restore)** is done. The PRD calls backup the only safety net.
-- **Phase gate (AGENTS.md):** nothing from "Not in Phase 1" below gets built here.
-- Anything touching migrations, installs, `.env*`, Docker, CI or auth needs explicit confirmation before it is run (global safety rules).
+- **Phase gate:** nothing from "Not in Phase 1" below gets built here.
 - A new ADR is needed for every major technical choice. Next free number: **0011**. Do not rewrite or renumber an ADR once code refers to it; supersede it or add a dated amendment.
 - Update `MEMORY.md` at the end of each milestone.
 
 ## Milestone order
 
 ```
-M0 Decisions ─▶ M1 Scaffold ─▶ M2 Data layer ─▶ M3 Worker ─▶ M4 Design system + shell
+M1 Scaffold ─▶ M2 Data layer ─▶ M3 Worker ─▶ M4 Design system + shell
       ─▶ M5 Profile ─▶ M6 Eligibility ─▶ M7 Jobs/tracker + dashboard
       ─▶ M8 Backup/restore  ── real data allowed from here ──
       ─▶ M9 Optional AI ─▶ M10 Demo ─▶ M11 Docker, docs, e2e
@@ -25,29 +24,15 @@ M5–M7 give a usable slice with no AI. M8 comes before AI because the schema is
 
 ---
 
-## M0: Decisions and housekeeping (no code)
-
-Blocks everything after it. The recovery-key decision is the tightest constraint: the database is encrypted from the first migration, so the key source must exist before any `drizzle-kit migrate`. Adding encryption later means re-encrypting existing data.
-
-- [ ] **Commit the pending docs rewrite and create a feature branch.** `main` has a large uncommitted ADR diff. *(You run this; commits are not done by Claude.)* Before committing, check `git config user.email` and `git log -1 --format=%ae` (personal repo: gmail address, `github-personal` SSH alias). Suggested commits, because the docs cross-reference each other: (1) `chore: add MIT license, agent rules, gitignore` (LICENSE, .gitignore, CLAUDE.md, .agents/), (2) `docs: local-first ADRs 0002-0010, PRD, stack, memory` (docs/adr, PRD.md, docs/STACK.md, MEMORY.md), (3) `docs: add phase plans, design system, env example` (docs/PHASE-*.md, docs/DESIGN.md, .env.example). **Done when:** `git status` is clean on a `feat/scaffold` branch.
-- [x] **ADR 0009: recovery-key storage.** Decided 2026-11-02: `RECOVERY_KEY` environment variable (32 bytes hex, in the root `.env.local` or Docker env), app never writes env files, `pnpm keygen` generates it, fail-fast on missing/wrong key, same key for DB and backups, rotation via backup + restore. See `docs/adr/0009-recovery-key-storage.md`. **Follow-ups:** `pnpm keygen` script (M1; not `pnpm setup`, which is a built-in pnpm command), wrong-key error behaviour confirmed in the M2 spike, ADR 0004 and 0008 cross-references.
-- [x] **ADR 0010: eligibility rule model.** *Draft written 2026-11-03 (`docs/adr/0010-eligibility-rule-model.md`, Proposed): lookup tables in the database, age limits stored per job (highest matching row wins), pure engine, no templates. Accepted 2026-11-03, including automatic lookup updates with a recompute-and-report.* **Done when:** ADR is Accepted. Its worked examples (8, including birthday on the cutoff, leap-day and combined-row cases) become the first engine tests.
-- [x] **Move ADR 0008 from Proposed to Accepted**, with the three open questions answered (done 2026-11-02; ADR 0004 now points to ADR 0009; `STACK.md` index and `MEMORY.md` updated).
-- [x] **`docs/DESIGN.md`:** written 2026-11-03 from the canvas (`https://claude.ai/artifact/5rr6QGN6RRdUUV5iLwgWuu`), with fixes listed in its "Changes from the canvas" section. aesthetic direction (one sentence), display + body font, accent color, status-color set, radius scale, motion rules. Required before any UI work. **Done when:** file exists and matches the AGENTS.md frontend rules.
-- [x] **Rewrite `.env.example`** for the new stack. Done 2026-11-04 with your OK: `RECOVERY_KEY`, plus `DEMO_MODE` and `TURSO_*` for the demo only. The AI variables are listed ahead of the code because ADR 0005 defines them as the contract; add any other variable only when the code that reads it is added.
-- [x] **Choose a license.** MIT, decided 2026-11-03, `LICENSE` added. The repo was already public without one. Follow-ups: add a license line to the README when it exists, and a `CONTRIBUTING.md` line that contributions are under the project license (M11).
-
----
-
 ## M1: Scaffold and tooling
 
-- [ ] **pnpm workspace** with only `apps/web` (`pnpm-workspace.yaml`, catalogs for React, Zod, TypeScript). *Package install: confirm first.* **Done when:** `pnpm install` works from a clean clone.
+- [ ] **pnpm workspace** with only `apps/web` (`pnpm-workspace.yaml`, catalogs for React, Zod, TypeScript). **Done when:** `pnpm install` works from a clean clone.
 - [ ] **Next.js 15 App Router + TypeScript strict** in `apps/web` (`noUncheckedIndexedAccess` on). **Done when:** `pnpm --filter web dev` serves a placeholder page.
 - [ ] **Biome** (lint + format) and **Vitest**. **Done when:** `pnpm lint`, `pnpm typecheck`, `pnpm test` all run from the root, and a trivial test passes.
-- [ ] **`pnpm keygen` script** (ADR 0009): generates `RECOVERY_KEY` into the root `.env.local` only if absent or empty, never overwrites a non-empty key, prints the key once. *The user runs it; Claude only writes the script.* **Done when:** a second run leaves the key unchanged, an empty `RECOVERY_KEY=` line is filled in (not duplicated), and the file is written with `0600` permissions.
+- [ ] **`pnpm keygen` script** (ADR 0009): generates `RECOVERY_KEY` into the root `.env.local` only if absent or empty, never overwrites a non-empty key, prints the key once. **Done when:** a second run leaves the key unchanged, an empty `RECOVERY_KEY=` line is filled in (not duplicated), and the file is written with `0600` permissions.
 - [ ] **Single `pnpm dev` launcher** (also behind `pnpm start` and the Docker entrypoint) that runs bootstrap, then starts web and worker together (worker is a stub at this point), with the web server bound to `127.0.0.1` (ADR 0003). If either process exits with code 75 (a staged restore, ADR 0008) it stops the other and runs bootstrap again. **Done when:** one command starts both, Ctrl-C stops both, exit code 75 triggers a clean restart, and the app is not reachable from another machine.
 - [ ] **Env validation:** one Zod-parsed `env.ts`, shared by web, worker, bootstrap and the launcher. It loads the root `.env.local` with `loadEnvConfig` from `@next/env` (ADR 0009), because Next.js alone reads only `apps/web` and `tsx` reads nothing. `RECOVERY_KEY` must be 64 hex chars unless `DEMO_MODE=1`, where it is neither required nor read; the app fails fast with a readable message (including the generator command) and never prints the key. AI variables (`AI_MODE`, `OLLAMA_BASE_URL`, `EMBEDDING_MODEL`, `EXTRACTION_MODEL`, `BYOK_*`) are optional with defaults; an invalid `AI_MODE` fails fast. An empty value (`BYOK_BASE_URL=` copied from `.env.example`) counts as unset, so the schema must not run `.url()` on `""`. **Done when:** a missing or malformed key stops startup, `DEMO_MODE=1` starts without one, web and worker read the same file, and a test asserts the key never appears in logs or error output.
-- [ ] **GitHub Actions:** typecheck, lint, test, build on PRs. *CI config: confirm first.* **Done when:** a PR runs green.
+- [ ] **GitHub Actions:** typecheck, lint, test, build on PRs. **Done when:** a PR runs green.
 
 ## M2: Data layer
 
@@ -77,7 +62,7 @@ Blocks everything after it. The recovery-key decision is the tightest constraint
 - [ ] **Lookup tables (ADR 0010):** `ref_categories`, `ref_regions`, `ref_qualification_levels`, `ref_disciplines`, each with a text primary `key` (seeded: permanent key from the seed file; custom: `custom:<uuid>`), `deprecated`, and `is_custom` for user-added rows. Seeded read-only from JSON; seeding inserts missing rows, updates a row in place when its values differ, marks removed rows `deprecated`, never touches custom rows, and enqueues `recompute_eligibility` in the same transaction when anything changed. Registered in the backup table registry (custom rows only). **Done when:** tests cover re-seeding twice (no change), a changed value updating the same row (its key and references stay valid), a removed row being deprecated and not deleted, custom rows surviving, a first start inserting everything, two concurrent runs not duplicating rows, and a changed seed enqueuing exactly one recompute task. A CI check validates seed files (required fields, unique keys, no `custom:` prefix, every parent key exists).
 - [ ] **Bootstrap step** (ADR 0010, ADR 0004 amendment): validate env → apply a staged restore if `data/restore/pending.json` exists (ADR 0008 step 8) → WAL checkpoint and pre-migration copy, only when migrations are pending (keep latest 3) → apply migrations → seed. Run by the launcher (`pnpm dev`, `pnpm start`, the Docker entrypoint) before web and worker start, and again after a staged restore. Also available as `pnpm bootstrap` and `pnpm seed`. Seeding failure is non-fatal with a visible banner; migration failure is fatal. No writes in `DEMO_MODE`. **Done when:** a simulated app update with a newer seed file updates the lookup rows on the next start with no manual command, and a failed migration leaves the pre-migrate copy and refuses to start.
 - [ ] **`scraper_sources`:** **create in Phase 2, not now.** ADR 0008 lists it in the backup, so the backup code must tolerate a table that does not exist yet (export is driven by a table registry, not a hard-coded list). **Done when:** the decision is recorded in the M8 task below.
-- [ ] **First migration** generated with drizzle-kit and applied by the bootstrap step (ADR 0004 amendment), not by a manual command. *Generating and first applying it: confirm first, and only after M0's key decision.* **Done when:** starting the app on an empty `data/` creates `data/app.db`, and opening that file without the key fails.
+- [ ] **First migration** generated with drizzle-kit and applied by the bootstrap step (ADR 0004 amendment), not by a manual command. Requires the recovery key (ADR 0009) to exist first. **Done when:** starting the app on an empty `data/` creates `data/app.db`, and opening that file without the key fails.
 - [ ] **Zod schemas for every JSON column** and every entity, in one place, reused by forms, Server Actions and backup validation. **Done when:** a round-trip test (insert → read → parse) passes for each table.
 - [ ] **Repository layer** (thin query functions per aggregate) so Server Actions stay small. **Done when:** no component imports `db` directly.
 
@@ -88,11 +73,12 @@ Blocks everything after it. The recovery-key decision is the tightest constraint
 - [ ] **Stale-task recovery:** on start, tasks stuck in `running` past a timeout go back to `queued`. **Done when:** killing the worker mid-task and restarting finishes the task.
 - [ ] **Handler registry** keyed by task `type`, payload validated with Zod. **Done when:** an unknown type or bad payload fails the task, not the process.
 - [ ] **`node-cron` host** with a daily maintenance stub. Reminders themselves are derived at read time (M7), so a run missed while the machine was off loses nothing. **Done when:** a log line appears on schedule.
+- [ ] **Worker heartbeat and banner (ADR 0007 amendment):** the worker writes a timestamp to a settings row every ~10 s (excluded from backups); the app shows "Background worker isn't running, tasks are waiting" when it is older than ~30 s. **Done when:** stopping the worker shows the banner within a minute, and restarting it clears the banner and runs the queued tasks.
 - [ ] **Graceful shutdown** (finish or release the current task on SIGTERM). **Done when:** shutdown during a task leaves no `running` orphan.
 
 ## M4: Design system and app shell
 
-*Requires `docs/DESIGN.md` from M0.*
+*Requires `docs/DESIGN.md`.*
 
 - [ ] **Theme tokens as CSS variables** exposed through Tailwind, light + dark. Status colors are a separate semantic set from the accent. **Done when:** both themes pass WCAG AA on text and focus rings.
 - [ ] **Fonts via `next/font`** with real fallback stacks; tabular-figure font for numbers. **Done when:** no layout shift, and no banned fonts in use.
@@ -100,7 +86,7 @@ Blocks everything after it. The recovery-key decision is the tightest constraint
 - [ ] **Shared data-view states:** `Loading`, `Empty`, `Error` components. **Done when:** every list screen later uses them, with no ad-hoc versions.
 - [ ] **App shell:** sidebar/nav, theme toggle, desktop-first layout. **Done when:** navigation between placeholder routes works with the keyboard.
 - [ ] **Host allow-list middleware** (ADR 0003): reject any request whose `Host` (port stripped) is not `localhost`, `127.0.0.1` or `[::1]`, on every route and Route Handler. Skipped under `DEMO_MODE`, otherwise the Vercel demo would reject every request. LAN use is an explicit opt-in that requires the passcode; settle that mechanism here. **Done when:** a request with a foreign `Host` header gets a 4xx, a test covers a rebinding-style request, and `DEMO_MODE=1` serves a non-localhost `Host`.
-- [ ] **Passcode middleware (optional, off by default):** hashed passcode check, cookie session. **Done when:** with a passcode set, every route and Route Handler is gated. *Auth logic: confirm design before building.*
+- [ ] **Passcode middleware (optional, off by default):** hashed passcode check, cookie session. **Done when:** with a passcode set, every route and Route Handler is gated.
 - [ ] **`DEMO_MODE` write guard, built now, not at M10.** One helper (`assertWritable()`) called by **every** Server Action and mutating Route Handler, plus a lint rule or test that fails if a Server Action file lacks the call. Hiding buttons alone is not enough. **Done when:** with `DEMO_MODE=1`, a direct POST to any action is rejected server-side.
 
 ## M5: First-run flow and Profile (Epic 7)
@@ -130,10 +116,12 @@ Blocks everything after it. The recovery-key decision is the tightest constraint
 - [ ] **Job form (manual entry):** sector type, organization (combobox), title, work model, dates, vacancies, source URL, eligibility criteria (structured), optional pasted description. Enters at `DISCOVERED`. **Done when:** create/edit/delete work, with Zod validation on every input and the submit button disabled while in flight.
 - [ ] **Corrigendum support:** editing a posting records the previous values (deadline extensions are common for government jobs). **Done when:** the job page shows "deadline changed from X to Y".
 - [ ] **Applications table (TanStack Table):** sticky header, tabular numbers, sort, filter by stage/sector/deadline, URL-synced filters. **Done when:** it stays usable at 500 rows (pagination or virtualisation decision recorded).
-- [ ] **Lifecycle transitions:** `DISCOVERED → APPLIED → ASSESSMENT → INTERVIEW → OFFER`, and `REJECTED`. Transitions run inside a transaction and write a stage-history row. Moving to `REJECTED` records only a plain note field: the post-mortem prompt is Phase 2. **Done when:** an invalid transition is rejected server-side.
-- [ ] **Sector tabs:** Government (eligibility, vacancies, category quotas, exam dates) and Private/IT (skills, recruiter links, fit score placeholder). **Done when:** each tab has loading, empty and error states.
+- [ ] **Lifecycle transitions:** `DISCOVERED → APPLIED → ASSESSMENT → INTERVIEW → OFFER`, and `REJECTED`. Transitions run inside a transaction and write a stage-history row. Moving to `REJECTED` records a required `rejection_reason` (`rejected` / `no_response` / `withdrawn`) and a plain note field: the post-mortem prompt is Phase 2. A `REJECTED` application can be **reopened** to any earlier stage the user picks (recruiters sometimes reply weeks later): same transaction, a stage-history row, and `rejection_reason` cleared (history keeps it). **Done when:** an invalid transition is rejected server-side, `REJECTED` without a reason is rejected, and a `no_response` application reopened to `INTERVIEW` shows the full trail in its history.
+- [ ] **Sector tabs:** Government (eligibility, vacancies, category quotas, exam dates) and Private/IT (skills, recruiter name and contact, fit score placeholder). **Done when:** each tab has loading, empty and error states.
+- [ ] **Follow-up action (private applications):** a "Followed up" button on the application (sets `last_contact_at`, optional snooze date into `next_action_due`) and optional `recruiter_name` / `recruiter_contact` fields. Defaults of 7 days after applying (only when a recruiter contact is set), 5 days after an assessment or interview, and 45 days for the housekeeping line live in `settings`. **Done when:** the button restarts the clock, snoozing overrides the default threshold, and both are validated with Zod.
 - [ ] **Dashboard:** counts, top 3 upcoming deadlines, best fit/eligible job right now, and in-app reminders. Asymmetric layout per the design rules. **Done when:** a deadline within 24 h shows a reminder, with no AI.
 - [ ] **Reminders are derived at read time** (decision recorded here): deadline-within-24h, no backup or backup older than 30 days (M8), and recompute-changed-verdict reports are computed from current data when the dashboard loads, so a sleeping machine never misses one. Only dismissals are stored (`reminder_dismissals`, keyed by reminder type + subject + trigger date). **Done when:** a reminder can be dismissed and does not reappear until its trigger changes (for example a new deadline).
+- [ ] **Follow-up reminder** (derived like the rest): a private application in `ASSESSMENT` or `INTERVIEW`, or in `APPLIED` with a `recruiter_contact`, whose latest activity (last stage change or `last_contact_at`) is older than the threshold, or whose `next_action_due` has passed, shows "No reply from <organisation> in N days". Trigger date is the due date, so a new follow-up lets it return. Group as "N applications awaiting reply" above a cap so a backfill does not flood the dashboard, and suggest closing with `no_response` after repeated follow-ups. Cold `APPLIED` applications (no recruiter contact) get no follow-up reminder; the table shows days since applied, and after 45 days they join one grouped, dismissible "N applications with no response. Close them?" line that closes only the ones the user selects. Government applications are excluded. **Done when:** an `APPLIED` application with a recruiter contact, 8 days old, shows the reminder; the same one without a contact does not; "Followed up" removes it until the next threshold; a snoozed one stays hidden until its date; 20 stale applications render as one grouped line; and nothing is ever closed without a user action.
 
 ## M8: Encrypted backup and restore (Feature 4, ADR 0008)
 
@@ -156,10 +144,10 @@ Blocks everything after it. The recovery-key decision is the tightest constraint
 - [ ] **`AIClient`** on the `openai` SDK: `baseURL`, key and model per provider. Modes `none` (default) / `ollama` / `byok`. **Done when:** with `none`, no AI UI is shown and no AI task is ever queued.
 - [ ] **AI configuration (ADR 0005):** a `getAiConfig()` resolver: database override, else environment default, else built-in default. **Settings → AI** shows each field's source ("from environment" / "overridden"), lets the user override it, and has Reset to default. Includes a connection test and the "allow cloud processing of personal data" toggle (Settings only, default off, never from env). **Done when:** an override beats the environment, Reset restores the environment value, and neither a saved nor an environment API key is ever returned to the browser (only "set" / "not set"). A key saved in Settings is excluded from backups.
 - [ ] **Per-task routing**: fallback chains, retry rules (429/5xx retry then fall back; 401/403 fall back with a warning; 400 no fallback; invalid output retry once then next), circuit breaker. **Done when:** each rule has a unit test with a fake provider.
-- [ ] **PII guard** as a single choke point in the client, not per call site. **Done when:** a `containsPii` task cannot reach `byok` unless allowed (tested).
+- [ ] **PII guard** as a single choke point in the client, not per call site. **Done when:** a `containsPii` task (including `embedProfile`) cannot reach `byok` unless allowed (tested).
 - [ ] **Zod-validated structured output** for every prompt, with `prompt_version` constants. **Done when:** malformed model output is a handled failure, never a crash.
 - [ ] **Tasks:** `resume_parse` (resume text → skills, shown as suggestions the user confirms, never auto-overwriting manual intake), `skill_extract` (job description → skills), `embed_job` / `embed_profile`, `fit_score` (private jobs only). **Done when:** each runs in the worker and writes provenance fields.
-- [ ] **Embedding pinning:** `nomic-embed-text` only, no fallback model; changing the model queues a full re-embed. **Done when:** vectors from different models are never compared.
+- [ ] **Embedding pinning (ADR 0005 amendment):** the pin is model id + vector size, stored in settings; the chain is `ollama`, `byok`, with no fallback model; the size is fixed at 768 by the schema. Changing the model, a start-up mismatch and a restore on BYOK ask for confirmation before a full re-embed. A 404 "model not found" pauses embedding tasks with a banner and a coverage count. **Done when:** vectors from different models are never compared, and tests cover the wrong-length vector (rejected, never written), the mismatch banner, the model-unavailable state, and switching `none` / `ollama` / `byok` without a re-embed.
 - [ ] **UI:** fit score with "scored by <model>" tooltip, a stale badge when `prompt_version` is old, and a clear "queued / failed, retry" state. **Done when:** Ollama stopped mid-task leaves the task queued, not lost.
 - [ ] **Do not apply AI to government eligibility.** **Done when:** a test asserts the eligibility module has no AI import.
 
@@ -170,11 +158,11 @@ Blocks everything after it. The recovery-key decision is the tightest constraint
 - [ ] **Turso database** for the demo, same driver. **Done when:** the app runs against it with `DEMO_MODE=1`.
 - [ ] **Audit the M4 write guard**: enumerate every Server Action and Route Handler and confirm each is covered; disable uploads, export, restore, AI settings and the worker. **Done when:** a script that POSTs to each endpoint gets rejections on all of them.
 - [ ] **Demo banner** and disabled-state UI with an explanation ("read-only demo"). Zero live AI calls. **Done when:** the network log shows no outbound AI requests.
-- [ ] **Vercel deployment.** *Production deploy: confirm first.* **Done when:** the demo URL loads and every screen has populated data.
+- [ ] **Vercel deployment.** **Done when:** the demo URL loads and every screen has populated data.
 
 ## M11: Docker, docs and end-to-end tests
 
-- [ ] **Single Docker image (optional: the app runs fine as plain processes with `pnpm dev` / `pnpm start`; skip or postpone this task if you don't need a container)** (web + worker, `data/` as a volume, non-root user, healthcheck Route Handler, the process binds `0.0.0.0` inside the container so the published port can reach it, and the port is published as `127.0.0.1:3000` only). Add a `.dockerignore` first (`.env*`, `data/`, `.git`), because `COPY . .` would otherwise bake the recovery key and the database into the image. *Docker: confirm before running.* **Done when:** `docker run` on a clean machine reaches first-run, data survives a container restart, and `docker history` / a file listing of the image shows no `.env.local` or `data/`.
+- [ ] **Single Docker image (optional; the app also runs as plain processes with `pnpm dev` / `pnpm start`)** (web + worker, `data/` as a volume, non-root user, healthcheck Route Handler, the process binds `0.0.0.0` inside the container so the published port can reach it, and the port is published as `127.0.0.1:3000` only). Add a `.dockerignore` first (`.env*`, `data/`, `.git`), because `COPY . .` would otherwise bake the recovery key and the database into the image. **Done when:** `docker run` on a clean machine reaches first-run, data survives a container restart, and `docker history` / a file listing of the image shows no `.env.local` or `data/`.
 - [ ] **README:** install (pnpm and Docker), Ollama setup (in Docker, `host.docker.internal`), recovery key and backup instructions, the full-disk-encryption caveat (the key sits in `.env.local`, ADR 0009), the localhost-only default and the LAN opt-in warning, how to restore a `pre-migrate-*` copy by hand. **Done when:** a fresh reader can run it without asking.
 - [ ] **Playwright smoke tests** against the demo build: load each main screen, confirm writes are rejected. **Done when:** they run in CI.
 - [ ] **Performance and scale pass:** the applications table with seeded 2,000 rows, dashboard query timings, DB indexes reviewed. **Done when:** numbers are recorded in this file.
@@ -184,7 +172,7 @@ Blocks everything after it. The recovery-key decision is the tightest constraint
 
 ## Not in Phase 1
 
-Do not build these here (AGENTS.md phase rule):
+Out of scope for Phase 1:
 
 - Backlog / Triage queue, duplicate check, scraper adapters, `scraper_sources` table, `services/ingest` (Python) → **Phase 2**. Manual jobs enter at `DISCOVERED`.
 - Web Clipper, LinkedIn referrals, pairing token, `/api/clips` → **Phase 2** (`apps/extension`, `packages/shared`).
@@ -192,13 +180,14 @@ Do not build these here (AGENTS.md phase rule):
 - Duplicate detection via embeddings → **Phase 2**.
 - Vacancy extraction from PDFs (Epic 5), LMS, starter templates, spaced repetition, **Preparedness Score computation** (Epic 6) → **Phase 3**. The column may exist; nothing fills it.
 - Email digest, browser/extension notifications → later. Phase 1 reminders are in-app only.
+- Sending follow-up emails, reading the inbox to detect replies, AI-drafted follow-up messages → not planned (drafting may come in Phase 2).
 
 ## Risks and scalability notes
 
 | Risk | Mitigation |
 |:---|:---|
 | libSQL encryption + vectors + two-process WAL may not work together | M2 spike is a hard gate |
-| Lost recovery key means lost data and unreadable backups | M0 ADR 0009, forced save at first run, clear UI copy |
+| Lost recovery key means lost data and unreadable backups | ADR 0009, forced save at first run, clear UI copy |
 | Key sits in `.env.local` on the same machine | Documented; full-disk encryption covers a compromised machine (ADR 0009). Resumes are inside the encrypted DB (ADR 0004 amendment) |
 | Another web page reaches the localhost app (DNS rebinding, LAN) | Bind `127.0.0.1`, Host allow-list, passcode required for LAN (ADR 0003) |
 | Restore is the highest-risk input path | Validate-before-write order, fault-injection tests, passcode gate, swap only in bootstrap |

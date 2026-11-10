@@ -15,7 +15,7 @@ The app is local-first and single-user (ADR 0002). There is no account and no ho
 Current state of the docs:
 
 - ADR 0004 originally treated a backup as a file copy, with the README explaining how to back up the key and `data/`. That is a manual procedure, not a feature.
-- The canvas (Settings → Data & privacy, and the first-run screen) already shows **Back up everything**, **Restore from a backup**, a **Recovery key**, and a **Restore from a backup (.zip)** button on first run. The PRD and ADRs do not describe any of it.
+- The design mockups (Settings → Data & privacy, and the first-run screen) already show **Back up everything**, **Restore from a backup**, a **Recovery key**, and a **Restore from a backup (.zip)** button on first run.
 
 Problems with "just copy `data/`":
 
@@ -47,7 +47,7 @@ A backup is a single `.zip` file with two entries:
 | Included | Excluded |
 |:---|:---|
 | Profile, jobs and their edit history, applications and stage history, notes, reminder dismissals, roadmaps and progress (when they exist), settings that are not secrets, `scraper_sources` | **Secrets:** a BYOK API key saved in Settings (a key from the environment is never in the database), extension pairing token, passcode hash |
-| The `files` table (resumes, notification PDFs) | **Derived data:** embeddings (re-queued after restore), the `tasks` queue |
+| The `files` table (resumes, notification PDFs) | **Derived data:** embeddings (rebuilt after restore), the `tasks` queue |
 | Custom lookup rows the user added (ADR 0010). Seeded lookup rows are rebuilt from the seed files at start-up, so they are not exported | Seeded lookup rows |
 
 Secrets are excluded by **column-level redaction** in the table registry (a table can export with named columns or keyed rows dropped), because the `settings` table holds both exportable values and secrets.
@@ -72,10 +72,10 @@ Like export, the heavy work runs in the worker (ADR 0003): after the upload, a S
 3. **Ask for the recovery key that encrypted the backup.** Decrypt in two passes, with the manifest as AAD. The first pass streams the ciphertext through AES-GCM and discards the output, only to verify the tag. The second pass decrypts again straight into the archive reader, so no plaintext file is ever written to `data/restore/`. Nothing is parsed until the tag has verified: a wrong key or a tampered file fails in the first pass and nothing is touched. This key is entered by the user and may differ from the running `RECOVERY_KEY` (for example after a key rotation, ADR 0009). It is used only to decrypt. It travels in the task payload (a row in the encrypted database, excluded from backups) and is overwritten as soon as the second pass has ended, whether it succeeded or failed. Steps 4 and 5 consume that pass's output as it streams, so the key is gone before step 6 begins. It is never logged, never put in `last_error`, and never kept after that point.
 4. **Check the archive:** verify `payload_sha256`, accept only the file names the table registry expects (no paths, so no zip-slip), and cap total uncompressed size (zip bomb).
 5. **Build a staging database at the backup's schema version.** Create `data/restore/staged.db`, encrypted with the running `RECOVERY_KEY`. Apply migrations up to the manifest's `schema_version` (`migrateTo`, ADR 0004 amendment), and insert the rows in one transaction. Unknown tables or columns are rejected, and SQLite's own constraints apply. Then apply the remaining migrations to reach the current version, which is where any change to a column's shape (including JSON columns) is handled. Finally, validate every row against the **current** Zod schemas. Validating before migrating would reject every older backup.
-6. **Back up first:** if there is existing data, write `data/backups/pre-restore-<timestamp>.zip` using the export code. This matches the canvas copy: "Your current data is backed up first."
+6. **Back up first:** if there is existing data, write `data/backups/pre-restore-<timestamp>.zip` using the export code. This matches the mockup copy: "Your current data is backed up first."
 7. **Stage and restart:** write `data/restore/pending.json`, mark the task done (so stale-task recovery does not report it as failed if the swap later fails), then the worker exits with code 75 to ask the launcher to restart. The launcher is the one script behind `pnpm dev`, `pnpm start` and the Docker entrypoint: when either process exits with code 75 it stops the other and runs bootstrap again. If the app was started some other way, the UI says "restore staged, restart the app to finish". The running database is untouched until then.
 8. **Swap in bootstrap, before any connection opens.** Bootstrap sees `pending.json`, checks that the staged file opens with the running key, deletes any stale `app.db-wal` and `app.db-shm`, and renames the staged file over `app.db` (same filesystem, so atomic). Then migrations and seeding run as usual (ADR 0010). If anything fails, the old `app.db` stays, `pending.json` is renamed to `failed-<timestamp>.json` so it is not retried on every start, and the failure is shown as a banner. Bootstrap also deletes leftover uploads and staged files in `data/restore/` that no `pending.json` refers to. This is why the swap is not done inside the running app: both the web process and the worker hold the file open, and renaming over a live file leaves them on the old inode.
-9. **Re-queue embeddings** for every job. With AI off this is a no-op.
+9. **Rebuild embeddings** for every job. With AI off this is a no-op. With `ollama` it is queued automatically. With `byok` it costs one API call per row, so the app shows a banner and asks for confirmation instead (ADR 0005, "Embeddings are pinned").
 
 ### Not offered in the public demo
 
@@ -83,7 +83,7 @@ Export and restore are disabled in the read-only demo (ADR 0002).
 
 ### Copy rules for the UI
 
-- Call it an "encrypted backup" in the UI. The current canvas text "a ZIP (JSON + PDFs)" should be updated to match.
+- Call it an "encrypted backup" in the UI. The mockup text "a ZIP (JSON + PDFs)" should be updated to match.
 - State plainly that **the recovery key is not inside the backup** and that a backup without the key cannot be opened.
 
 ## Alternatives Considered
@@ -91,7 +91,7 @@ Export and restore are disabled in the read-only demo (ADR 0002).
 | Option | Why not |
 |:---|:---|
 | Copy `app.db` (the original ADR 0004 text) | Version-coupled, and risk of copying mid-write. Stays documented as a manual route for advanced users, with the key. |
-| Plain ZIP of JSON + PDFs (as the canvas wording suggests) | Readable by anyone who finds the file. A backup must not be weaker than the live database. |
+| Plain ZIP of JSON + PDFs (as the mockup wording suggests) | Readable by anyone who finds the file. A backup must not be weaker than the live database. |
 | `VACUUM INTO` / libSQL encrypted copy | Still tied to the engine and schema version, and cannot be re-encrypted under a different key or validated row by row. |
 | Separate backup passphrase | A second secret to lose. The recovery key is already mandatory. |
 | ZIP-level AES encryption (WinZip AES) | Library support is uneven, and file names stay visible. Encrypting one payload keeps the format under our control. |

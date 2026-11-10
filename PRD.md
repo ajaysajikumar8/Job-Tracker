@@ -58,6 +58,14 @@ Jobs enter the tracker three ways (see ADR `0006-data-ingestion.md`):
 - **Proactive Notification Engine:**
   - A low-friction alert system that pings the user when an application deadline is 24 hours away or a Spaced Repetition revision is due.
   - Phase 1: in-app reminders on the dashboard. Later: browser/extension notifications, plus an optional email digest through the user's own SMTP settings.
+- **Follow-up Reminders (private jobs):**
+  - Follow-up only makes sense once a person has engaged. An application in `ASSESSMENT` or `INTERVIEW`, or in `APPLIED` with a recruiter contact on it, with no activity for a set number of days shows "No reply from <organisation> in N days. Follow up?" on the dashboard. Defaults: 7 days after applying, 5 days after an assessment or interview, editable in settings. Activity is the latest of the last stage change and `last_contact_at`.
+  - A cold `APPLIED` application (no recruiter contact) never gets a follow-up reminder: silence from a large company is the normal outcome. The table shows "days since applied" instead.
+  - Housekeeping: cold `APPLIED` applications with no response for 45 days (editable) appear in one quiet, grouped line, "N applications with no response. Close them?". The app only suggests, never closes anything itself.
+  - "Followed up" sets `last_contact_at` and restarts the clock. The user can also snooze to a chosen date, stored in `next_action_due`, which overrides the default threshold for that application.
+  - The application keeps an optional recruiter name and contact (email or profile link), so the reminder links straight to who to message.
+  - After repeated follow-ups with no reply, the reminder suggests closing the application as `REJECTED` with reason `no_response`. Closing is reversible: "Reopen" returns the application to a stage the user picks (for example `INTERVIEW` when a recruiter calls back weeks later), clears the reason, and `StageHistory` keeps the full trail.
+  - Reminders are derived from current data when the dashboard loads. Nothing is sent to the recruiter and no background process is needed. Government applications are excluded (exam and result dates, no recruiter to chase). Out of scope: sending email, reading the user's inbox to detect replies, AI-drafted messages (possible later in Phase 2).
 
 ### Epic 5: Vacancy Extraction
 - **Vacancy Tracking:**
@@ -86,7 +94,7 @@ Jobs enter the tracker three ways (see ADR `0006-data-ingestion.md`):
 - **Connection Mapping (Referral Engine):**
   - When the user explicitly clicks "Find Referrals" in the dashboard, the extension runs a single, secure background query to LinkedIn using the active local session.
 - **Client-Side Guardrails & Rate Limiting:**
-  - To protect the user from their own enthusiasm and prevent LinkedIn bans, the extension enforces a hard local rate limit (e.g., Maximum of 10 referral checks per 24-hour rolling window).
+  - To prevent LinkedIn bans, the extension enforces a hard local rate limit (e.g., Maximum of 10 referral checks per 24-hour rolling window).
 
 ---
 
@@ -125,7 +133,7 @@ Jobs enter the tracker three ways (see ADR `0006-data-ingestion.md`):
 **User Story:** As a candidate who just failed an interview, I want to log the reason for my rejection so the learning engine can immediately adapt my syllabus to fix my weak points before my next interview.
 
 **Acceptance Criteria:**
-- Moving a job to `REJECTED` triggers a mandatory or optional "Post-Mortem" input field.
+- Moving a job to `REJECTED` asks for a reason (`rejected`, `no_response`, `withdrawn`). Only `rejected` triggers the mandatory or optional "Post-Mortem" input field; a company that never replied has no failure to learn from.
 - Extracted keywords from the post-mortem (e.g., "Dynamic Programming") are confirmed by the user and then reprioritise their focus skills (Phase 2). Once the LMS exists (Phase 3), the same skills highlight matching nodes in the roadmap, or propose a new node that the user confirms. Nothing is added silently.
 
 ### Feature 3: Browser Extension (Job Clipping & Safe Referrals)
@@ -167,8 +175,11 @@ Single-user installation: there is exactly one profile, so entities do not carry
 - `eligibility_status`, `ineligibility_reason`, the full eligibility result with `engine_version` and evaluation time, an optional user override with a note, `fit_score`
 - Every stage change writes a `StageHistory` row.
 - `lifecycle_stage` (Enum): `BACKLOG`, `DISCOVERED`, `APPLIED`, `ASSESSMENT`, `INTERVIEW`, `OFFER`, `REJECTED`
+- `rejection_reason` (Enum, set on `REJECTED`): `rejected`, `no_response`, `withdrawn`
 - `post_mortem_notes` (Text): Logged failure reasons.
-- `next_action_due` (DateTime)
+- `last_contact_at` (DateTime): last time the user followed up. Starts the follow-up clock together with the last stage change.
+- `next_action_due` (DateTime, optional): user-chosen snooze or "remind me on" date. When set, it replaces the default follow-up threshold for this application.
+- `recruiter_name`, `recruiter_contact` (Text, optional)
 - `network_matches` (List of Objects)
 
 ### Entity: `UserLearningRoadmap`

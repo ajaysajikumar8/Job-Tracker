@@ -13,7 +13,7 @@ A local-first, single-user, AI-assisted tracker for government jobs (rule-based 
 - **0002 Product direction:** local-first, single user, no multi-tenant hosting, read-only precomputed demo, distributed via GitHub.
 - **0003 App architecture:** one Next.js 15 app (RSC, Server Actions, Route Handlers) plus a `worker.ts` process polling a `tasks` table. pnpm workspace. No tRPC, Celery, Redis or Auth.js. Python deferred to Phase 2.
 - **0004 Storage:** SQLite/libSQL (vectors, encryption at rest) + Drizzle. drizzle-kit generates migrations; bootstrap applies them at start-up. Uploaded files are BLOBs in the encrypted DB (no `data/files/`). No `user_id` columns.
-- **0005 AI:** modes `none` (default) / `ollama` / `byok`. Config: env defaults, Settings (DB) overrides, Reset to default; consent toggle Settings-only. Per-task fallback chains, PII guard, Zod-validated output, pinned embeddings, provenance fields. AI runs only in the worker.
+- **0005 AI:** modes `none` (default) / `ollama` / `byok`. Config: env defaults, Settings (DB) overrides, Reset to default; consent toggle Settings-only. Per-task fallback chains, PII guard, Zod-validated output, pinned embedding model + size (Ollama or BYOK; guarded re-embed), provenance fields. AI runs only in the worker.
 - **0006 Ingestion:** manual entry (Phase 1) → curated scraper adapters + Web Clipper (Phase 2), everything through the Backlog.
 - **0007 Extension:** Plasmo, pairing token + origin check for the localhost API, LinkedIn limit of 10 per 24 h client-side.
 - **0008 Backup/restore:** one encrypted ZIP (plaintext manifest + AES-256-GCM payload), keyed from the recovery key. Logical JSON export, versioned by Drizzle `schema_version`. Secrets and embeddings excluded. Restore builds a staged DB (migrate, then validate), backs up current data, then bootstrap swaps it in after a launcher restart (never under a live connection). Manifest is GCM AAD. Worker runs the export and the restore (a `backup_restore` task: no retry; the typed backup key sits in the task payload only until decryption ends, then is overwritten; the worker exits 75 so the launcher restarts). Keeps the latest 3 `pre-restore-*` files.
@@ -21,8 +21,8 @@ A local-first, single-user, AI-assisted tracker for government jobs (rule-based 
 - **0009 Recovery key:** `RECOVERY_KEY` env var (32 bytes hex) in the root `.env.local`, outside `data/`. The app never writes env files; `pnpm keygen` generates it (never `pnpm setup`, a pnpm built-in). Missing or wrong key fails fast. Same key for DB and backups. Rotation = backup, new key, restore.
 
 ## Open Items
-- UI source of truth: `docs/DESIGN.md` (from the canvas at https://claude.ai/artifact/5rr6QGN6RRdUUV5iLwgWuu: retro-technical, Bricolage Grotesque + Source Sans 3 + JetBrains Mono, lime accent `#C8F03C`). Its "Canvas follow-ups" list the canvas screens that still contradict ADRs 0008/0010 or lack states.
+- UI source of truth: `docs/DESIGN.md` (from the design mockups: retro-technical, Bricolage Grotesque + Source Sans 3 + JetBrains Mono, lime accent `#C8F03C`). Its "Mockup follow-ups" list the mockup screens that still contradict ADRs 0008/0010 or lack states.
 - Open question in ADR 0010: accept date-bound age limits ("born not before X") in the job form? Decide before M6.
 - Servers bind 127.0.0.1 and check `Host`, except under `DEMO_MODE` (ADR 0003); the M2 spike also tests Python opening the encrypted DB.
 - Phase 2: decide FastAPI vs a plain Python worker for `services/ingest`.
-- Plans: `docs/PHASE-1-PLAN.md`, `PHASE-2-PLAN.md`, `PHASE-3-PLAN.md` hold the task lists. License: MIT (`LICENSE`, decided 2026-11-03). Remaining Phase 1 M0 items: commit + feature branch (user).
+- Plans: `docs/PHASE-1-PLAN.md`, `PHASE-2-PLAN.md`, `PHASE-3-PLAN.md` hold the task lists. License: MIT (`LICENSE`).

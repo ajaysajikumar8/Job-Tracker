@@ -1,7 +1,7 @@
 # Design
 
 > Visual source of truth for the Next.js app and the Plasmo extension. Reuse it; do not invent a new direction per screen.
-> Derived from the "Job Tracker — All Screens" canvas (26 screens), then checked against the frontend rules in `.agents/rules/AGENTS.md`. Where this file differs from the canvas, the difference is listed in "Changes from the canvas" and this file wins. The canvas is a private claude.ai artifact (`https://claude.ai/artifact/5rr6QGN6RRdUUV5iLwgWuu`) that outside readers cannot open, so nothing here may depend on seeing it.
+> Derived from the original design mockups (26 screens), then checked against the frontend rules in `.agents/rules/AGENTS.md`. Where this file differs from the mockups, the difference is listed in "Changes from the mockups" and this file wins. The mockups are not in the repository, so nothing here depends on seeing them.
 > Last updated: 2026-11-04
 
 ## Direction
@@ -140,18 +140,18 @@ Short and meaningful, CSS only: hover and state transitions at 150ms (`backgroun
 - Shared components (button, field, chips, table shell, states) live in one place and are reused. No copy-pasted markup.
 - The extension (Plasmo) imports the same tokens file.
 
-## Changes from the canvas
+## Changes from the mockups
 
 1. **Control borders use `--ink3`**, not `--line`, to meet 3:1 non-text contrast.
 2. **`--acc-hover` is a token**, not a hard-coded `#B5DE2A` in each screen.
-3. **Minimum text size is 11px.** The canvas has some 10 and 10.5px labels.
+3. **Minimum text size is 11px.** The mockups have some 10 and 10.5px labels.
 4. **`needs_info` is labelled "Needs info"**, not "Review", so the chip matches the engine result (ADR 0010).
-5. **No accent as text on a light background.** The canvas does this once (Backlog).
+5. **No accent as text on a light background.** The mockups do this once (Backlog).
 6. **One `--scrim` value** per theme (PostMortem differs slightly from the others).
 
-## Canvas follow-ups (not blocking the build)
+## Mockup follow-ups (not blocking the build)
 
-- **Age limits** (`AddJob`, `Government`): the canvas pre-fills "standard central rules" and shows "18–32 +3". ADR 0010 stores final limits per category on each job and has no pre-filled rules. The form needs a General limit, rows for other categories or flags, and a line for the user's own category. The table should show the limit that applies to the user.
+- **Age limits** (`AddJob`, `Government`): the mockups pre-fill "standard central rules" and shows "18–32 +3". ADR 0010 stores final limits per category on each job and has no pre-filled rules. The form needs a General limit, rows for other categories or flags, and a line for the user's own category. The table should show the limit that applies to the user.
 - **Settings → Data & privacy:** use "encrypted backup", not "a ZIP (JSON + PDFs)", and state that the recovery key is not inside the backup (ADR 0008).
 - **Loading, empty and error states** are drawn for six screens (Dashboard, Government, Private, Backlog, Revisions, Skill gaps). The other data views (Sources, Learning, Templates, Duplicates, Job detail, Preparedness) still need them.
 - **Onboarding:** domicile, degree and skills should be searchable comboboxes (no combobox found).

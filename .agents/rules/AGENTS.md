@@ -1,7 +1,7 @@
 # AI Agent Instructions (AGENTS.md)
 
-## Role
-You are an elite Staff Software Engineer and Senior Product Manager collaborating on the Job Discovery & Application Tracking System.
+## Project
+Job Discovery & Application Tracking System: a local-first tracker for government and private job applications. Product scope is in `PRD.md`.
 
 ## Project Guidelines
 1. **Context Maintenance**: Always review `MEMORY.md` and `PRD.md` before making sweeping changes or suggesting new features. Update `MEMORY.md` when completing a major milestone.

@@ -6,6 +6,8 @@ Date: 2026-10-30
 
 Accepted (Phase 2). Revises the original ADR 0006 from commit `3de4acf` for a local, single-user backend.
 
+Amended (2026-11-10): offline app handling, outbox, idempotent clips and error messages (amendment at the end).
+
 ## Context
 
 The extension has two jobs:
@@ -59,3 +61,33 @@ User clicks "Clip Job"
 - **Negative:** DOM heuristics are fragile across sites. Clips are "best effort" and always reviewed by the user.
 - **Negative:** Using LinkedIn's internal endpoints may violate its terms. The rate limit reduces account risk but does not remove it. The feature stays explicit and opt-in.
 - **Negative:** Plasmo adds its own build abstractions. Migrating to raw Manifest V3 is a known path if needed.
+
+## Amendment (2026-11-10): the app may be offline; the extension queues and explains
+
+**Problem.** The clip flow assumes the local app is running, but it is not always on (ADR 0003). The extension cannot write to the encrypted database file itself (ADR 0004, ADR 0009), so something local must be listening. The original flow only said a failed send keeps the draft, so a clip was lost if the popup or browser closed before a retry, and every failure looked the same.
+
+**Decision.**
+- **Outbox.** A confirmed clip is first stored in `chrome.storage.local` (the validated payload only, never page HTML). It is sent when the app is reachable and retried with backoff using `chrome.alarms`. The popup shows the pending count. A pending clip is never silently dropped.
+- **Idempotency.** The payload carries a client-generated `clip_id`. `/api/clips` treats a repeat of a known `clip_id` as a success and creates nothing, so a retry after a lost response cannot create a duplicate.
+- **Health check on popup open.** `GET /api/health` returns only `{ ok: true }` (no version, no counts), with a 3 s timeout. The popup shows a status dot before the user reviews fields. A refused connection and a timeout are both reported as "can't reach the app" because the browser reports them as the same generic `fetch` error.
+- **Distinct failures:**
+
+  | Result | Message | Retried? |
+  |:---|:---|:---|
+  | Unreachable / timeout | "Can't reach the app at `<url>`. Start it (`pnpm start` or `docker compose up`), then retry. Your clip is saved." | Yes, automatically |
+  | 401 | Pairing token wrong or revoked: re-pair in the extension settings | No |
+  | 403 | Origin not allowed: check the extension ID | No |
+  | 422 | Clip failed validation, names the field | No, the user edits it |
+  | 5xx | App error | Yes, with backoff |
+
+  A non-retried clip stays in the outbox marked "needs attention" until the user fixes or discards it.
+- **App-side counterpart.** The web app can be up while the worker is down, which leaves tasks queued with no explanation. The worker writes a heartbeat, and the UI shows a banner when it is stale (Phase 1 M3).
+
+**Rejected.**
+- *The app pulls pending clips from the extension at start-up:* a browser extension cannot be reached from the app without an inbound channel, which weakens the boundary above.
+- *Native messaging to start the app:* needs an installed helper binary, which is out of proportion for this tool.
+
+**Consequences.**
+- **Positive:** clipping works while the app is off, and each failure tells the user what to do.
+- **Negative:** pending clips live only in the browser profile and are not backed up.
+- **Negative:** `/api/health` lets any web page detect that the app is running. It returns nothing else, and the Host-header middleware (ADR 0003) still applies.

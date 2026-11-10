@@ -62,3 +62,7 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 *.swp
+
+# ── AI tool local state ───────────────────────────────
+.claude/
+*.local.md

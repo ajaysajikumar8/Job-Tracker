@@ -71,7 +71,7 @@
 |:---|:---|
 | **`openai` npm SDK** | One client for Ollama and any OpenAI-compatible BYOK provider. |
 | **Ollama** (user-installed) | Free, private local inference. |
-| **`nomic-embed-text`** | Pinned embedding model (768-dim). |
+| **`nomic-embed-text`** | Default embedding model (768-dim), pinned per install. Runs on Ollama or BYOK. |
 | **`llama3.2:3b`** (configurable) | Structured extraction, always validated with Zod. |
 | **unpdf** | Resume PDF → text. |
 | **mammoth** | Resume `.docx` → text. |
