@@ -1,0 +1,28 @@
+{
+  "name": "web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx scripts/launcher.ts dev",
+    "start": "tsx scripts/launcher.ts start",
+    "build": "next build",
+    "keygen": "tsx scripts/keygen.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@next/env": "^16.4.6",
+    "next": "^16.4.6",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "tsx": "^4.23.15",
+    "typescript": "catalog:",
+    "vitest": "^5.1.0"
+  }
+}

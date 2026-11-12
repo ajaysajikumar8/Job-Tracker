@@ -48,7 +48,7 @@ These apply to any UI work in the Next.js app or the Plasmo extension.
 - Layouts are responsive but desktop-first, per the PRD NFR.
 
 ### Stack
-- Next.js 15 (App Router), React, TypeScript, Tailwind, Radix UI primitives.
+- Next.js 16 (App Router), React, TypeScript, Tailwind, Radix UI primitives.
 - Build shared components in one place and reuse them. Do not copy and paste markup.
 
 ### Output Format for UI Work

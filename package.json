@@ -1,0 +1,22 @@
+{
+  "name": "job-application-tracker",
+  "private": true,
+  "packageManager": "pnpm@10.11.0",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "start": "pnpm --filter web start",
+    "build": "pnpm -r build",
+    "keygen": "pnpm --filter web keygen",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.6",
+    "typescript": "catalog:"
+  }
+}

@@ -1,7 +1,7 @@
 # Tech Stack Reference
 
 > Current tools only, each with a one-line reason. The reasoning behind each decision is in the linked ADR.
-> Last updated: 2026-11-04
+> Last updated: 2026-11-12
 
 ---
 
@@ -10,7 +10,7 @@
 ```
                 ┌────────────────────── Your machine ──────────────────────┐
                 │                                                          │
-  Browser ──────┼──▶  apps/web  (Next.js 15)                               │
+  Browser ──────┼──▶  apps/web  (Next.js 16)                               │
                 │       RSC reads · Server Actions writes · Route Handlers │
                 │            │                                             │
   Extension ────┼──▶  /api/clips (pairing token)        [Phase 2]          │
@@ -36,7 +36,7 @@
 
 | Tool | Why |
 |:---|:---|
-| **Next.js 15 (App Router)** | One app for the UI and the backend: RSC reads, Server Actions writes, Route Handlers for the extension. |
+| **Next.js 16 (App Router)** | One app for the UI and the backend: RSC reads, Server Actions writes, Route Handlers for the extension. |
 | **TypeScript (strict)** | The eligibility rules are edge-case heavy; types catch mistakes early. |
 | **Zod** | One schema validates forms, Server Action input, extension payloads and LLM output. |
 | **pnpm workspaces + catalogs** | `apps/*` and `packages/*` in one repo, with one lockfile and aligned versions. |

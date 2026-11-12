@@ -90,4 +90,4 @@ User clicks "Clip Job"
 **Consequences.**
 - **Positive:** clipping works while the app is off, and each failure tells the user what to do.
 - **Negative:** pending clips live only in the browser profile and are not backed up.
-- **Negative:** `/api/health` lets any web page detect that the app is running. It returns nothing else, and the Host-header middleware (ADR 0003) still applies.
+- **Negative:** `/api/health` lets any web page detect that the app is running. It returns nothing else, and the Host-header proxy (ADR 0003) still applies.
