@@ -11,7 +11,7 @@ A local-first, single-user, AI-assisted tracker for government jobs (rule-based 
 
 ## Key Decisions (details in the ADRs; don't duplicate them here)
 - **0002 Product direction:** local-first, single user, no multi-tenant hosting, read-only precomputed demo, distributed via GitHub.
-- **0003 App architecture:** one Next.js 15 app (RSC, Server Actions, Route Handlers) plus a `worker.ts` process polling a `tasks` table. pnpm workspace. No tRPC, Celery, Redis or Auth.js. Python deferred to Phase 2.
+- **0003 App architecture:** one Next.js 16 app (RSC, Server Actions, Route Handlers) plus a `worker.ts` process polling a `tasks` table. pnpm workspace. No tRPC, Celery, Redis or Auth.js. Python deferred to Phase 2.
 - **0004 Storage:** SQLite/libSQL (vectors, encryption at rest) + Drizzle. drizzle-kit generates migrations; bootstrap applies them at start-up. Uploaded files are BLOBs in the encrypted DB (no `data/files/`). No `user_id` columns.
 - **0005 AI:** modes `none` (default) / `ollama` / `byok`. Config: env defaults, Settings (DB) overrides, Reset to default; consent toggle Settings-only. Per-task fallback chains, PII guard, Zod-validated output, pinned embedding model + size (Ollama or BYOK; guarded re-embed), provenance fields. AI runs only in the worker.
 - **0006 Ingestion:** manual entry (Phase 1) → curated scraper adapters + Web Clipper (Phase 2), everything through the Backlog.
